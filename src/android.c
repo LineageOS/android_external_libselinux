@@ -1060,6 +1060,7 @@ struct pkgInfo *package_info_lookup(const char *name)
 #define EXPAND_USER_PATH "/mnt/expand/\?\?\?\?\?\?\?\?-\?\?\?\?-\?\?\?\?-\?\?\?\?-\?\?\?\?\?\?\?\?\?\?\?\?/user"
 #define DATA_DATA_PREFIX DATA_DATA_PATH "/"
 #define DATA_USER_PREFIX DATA_USER_PATH "/"
+#define CPU_CPUX_PATH "/sys/devices/system/cpu/cpu"
 
 static int pkgdir_selabel_lookup(const char *pathname,
                                  const char *seinfo,
@@ -1165,12 +1166,16 @@ static int restorecon_sb(const char *pathname, const struct stat *sb,
     char *secontext = NULL;
     char *oldsecontext = NULL;
     int rc = 0;
+    int logtype = SELINUX_ERROR;
 
     if (selabel_lookup(fc_sehandle, &secontext, pathname, sb->st_mode) < 0)
         return 0;  /* no match, but not an error */
 
-    if (lgetfilecon(pathname, &oldsecontext) < 0)
+    if (lgetfilecon(pathname, &oldsecontext) < 0) {
+        if (!strncmp(pathname, CPU_CPUX_PATH, sizeof(CPU_CPUX_PATH)-1))
+            logtype = SELINUX_INFO;
         goto err;
+    }
 
     /*
      * For subdirectories of /data/data or /data/user, we ignore selabel_lookup()
@@ -1203,7 +1208,7 @@ out:
     return rc;
 
 err:
-    selinux_log(SELINUX_ERROR,
+    selinux_log(logtype,
                 "SELinux: Could not set context for %s:  %s\n",
                 pathname, strerror(errno));
     rc = -1;
